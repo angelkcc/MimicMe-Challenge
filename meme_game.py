@@ -73,10 +73,10 @@ MEMES = [
         "instruction": "Make a HEART shape with both hands in front of your chest",
     },
     {
-        "file": "meme2_monkey_shocked.jpg",
-        "name": "WAIT WHAT?! 😱",
-        "gesture": "hands_clasped_open_mouth",
-        "instruction": "Clasp both hands in front of your chest",
+        "file": "meme2_monkey_pointing.jpg",
+        "name": "Nerd Monkey 🤓",
+        "gesture": "one_finger_up",
+        "instruction": "Point ONE index finger straight UP! ☝️",
     },
     {
         "file": "meme3_monkey_screaming.jpg",
@@ -206,10 +206,6 @@ def score_gesture(gesture_type, lm):
         score = 0
         ns = lm.get("nose")
 
-        # Use the HAND-tracking wrist (from mp_hands), not the body-pose wrist.
-        # The body-pose wrist can lose confidence when someone is framed close to
-        # the camera (elbow cropped out of frame), even though the dedicated hand
-        # tracker still sees the hand clearly.
         near_face_count = 0
         best_dist = None
         for h in hands:
@@ -218,8 +214,6 @@ def score_gesture(gesture_type, lm):
                 dist = np.linalg.norm(w - ns)
                 at_chin_height = w[1] > ns[1] - 0.08
             else:
-                # Nose not detected either (rare) — fall back to a generous check
-                # so the gesture isn't unfairly blocked
                 dist = 0.15
                 at_chin_height = True
             if dist < 0.30 and at_chin_height:
@@ -231,8 +225,6 @@ def score_gesture(gesture_type, lm):
             if best_dist is not None and best_dist < 0.18:
                 score += 25
 
-        # Penalize the classic "hands on ears" shape: two hands, near the face,
-        # but far apart from each other and both raised high
         if n_hands >= 2:
             w0 = hands[0]["wrist"]
             w1 = hands[1]["wrist"]
@@ -252,13 +244,11 @@ def score_gesture(gesture_type, lm):
         score = 0
         if n_hands >= 2:
             score += 30
-            # Both wrists should be close to each other
             w0 = hands[0]["wrist"]
             w1 = hands[1]["wrist"]
             dist = np.linalg.norm(w0 - w1)
             if dist < 0.18:
                 score += 50
-            # Both should be roughly at chest level (between shoulder & hip)
             ls = lm.get("left_shoulder")
             rs = lm.get("right_shoulder")
             if ls is not None and rs is not None:
@@ -280,18 +270,15 @@ def score_gesture(gesture_type, lm):
             score += 20
             w0 = hands[0]["wrist"]
             w1 = hands[1]["wrist"]
-            # Hands should be far apart horizontally
             x_dist = abs(w0[0] - w1[0])
             if x_dist > 0.3:
                 score += 30
-            # Both wrists should be elevated (above shoulders)
             lw_up = wrist_above_shoulder("left_wrist", "left_shoulder", margin=0.0)
             rw_up = wrist_above_shoulder("right_wrist", "right_shoulder", margin=0.0)
             if lw_up and rw_up:
                 score += 30
             elif lw_up or rw_up:
                 score += 15
-            # Both near head
             if wrist_near_head("left_wrist") and wrist_near_head("right_wrist"):
                 score += 20
         elif n_hands == 1:
@@ -308,7 +295,6 @@ def score_gesture(gesture_type, lm):
             score += 10
         gun_count = 0
         for h in hands:
-            # Index extended, other fingers curled
             if (h["index_extended"] and
                 not h["middle_extended"] and
                 not h["ring_extended"] and
@@ -318,7 +304,6 @@ def score_gesture(gesture_type, lm):
             score += 70
         elif gun_count == 1:
             score += 35
-        # Bonus for both hands extended forward (wrists in upper region)
         both_up = (wrist_above_shoulder("left_wrist", "left_shoulder", margin=-0.1) and
                    wrist_above_shoulder("right_wrist", "right_shoulder", margin=-0.1))
         if both_up:
@@ -340,7 +325,6 @@ def score_gesture(gesture_type, lm):
                 score += 40
             elif x_dist > 0.3:
                 score += 20
-        # Wrists should be BELOW shoulder (not raised)
         ls = lm.get("left_shoulder")
         rs = lm.get("right_shoulder")
         lw = lm.get("left_wrist")
@@ -363,18 +347,15 @@ def score_gesture(gesture_type, lm):
             score += 20
             w0 = hands[0]["wrist"]
             w1 = hands[1]["wrist"]
-            # Should be wide apart (on each side of face)
             x_dist = abs(w0[0] - w1[0])
             if x_dist > 0.25:
                 score += 25
-            # Both should be near face
             near_face_l = wrist_near_head("left_wrist")
             near_face_r = wrist_near_head("right_wrist")
             if near_face_l and near_face_r:
                 score += 40
             elif near_face_l or near_face_r:
                 score += 20
-            # Both elevated
             if (wrist_above_shoulder("left_wrist", "left_shoulder", margin=0.0) and
                 wrist_above_shoulder("right_wrist", "right_shoulder", margin=0.0)):
                 score += 15
@@ -398,7 +379,7 @@ def score_gesture(gesture_type, lm):
             if thumb_up:
                 s += 40
             if fingers_curled and thumb_up:
-                s += 20   # clean combo bonus
+                s += 20
             best_score = max(best_score, s)
         return min(best_score, 100), f"Thumbs up: {'✓' if best_score >= THRESHOLD_EASY else '✗'}"
 
@@ -416,12 +397,10 @@ def score_gesture(gesture_type, lm):
                 score += 45
             elif dist < 0.25:
                 score += 25
-
             idx_up0 = hands[0]["index_tip"][1] < w0[1] - 0.03
             idx_up1 = hands[1]["index_tip"][1] < w1[1] - 0.03
             if idx_up0 and idx_up1:
                 score += 25
-
             ns = lm.get("nose")
             avg_wrist_y = (w0[1] + w1[1]) / 2
             if ns is not None:
@@ -444,23 +423,43 @@ def score_gesture(gesture_type, lm):
             th0, th1   = hands[0]["thumb_tip"], hands[1]["thumb_tip"]
             idx_dist   = np.linalg.norm(idx0 - idx1)
             thumb_dist = np.linalg.norm(th0 - th1)
-
             if idx_dist < 0.08:
                 score += 35
             elif idx_dist < 0.15:
                 score += 20
-
             if thumb_dist < 0.10:
                 score += 35
             elif thumb_dist < 0.18:
                 score += 20
-
             w0, w1 = hands[0]["wrist"], hands[1]["wrist"]
             if np.linalg.norm(w0 - w1) < 0.30:
                 score += 30
         elif n_hands == 1:
             score += 10
         return min(score, 100), f"Heart hands: {'✓' if score >= THRESHOLD_EASY else '✗'}"
+
+    # ════════════════════════════════════════════
+    #  GESTURE 10: one_finger_up
+    #  One hand, index finger extended straight up, others curled
+    # ════════════════════════════════════════════
+    elif gesture_type == "one_finger_up":
+        best_score = 0
+        for h in hands:
+            s = 0
+            # Index must be extended
+            if h["index_extended"]:
+                s += 50
+            # All other fingers must be curled
+            others_curled = (not h["middle_extended"] and
+                             not h["ring_extended"] and
+                             not h["pinky_extended"])
+            if others_curled:
+                s += 30
+            # Bonus: fingertip clearly above wrist (pointing upward, not sideways)
+            if h["index_tip"][1] < h["wrist"][1] - 0.08:
+                s += 20
+            best_score = max(best_score, s)
+        return min(best_score, 100), f"One finger up: {'✓' if best_score >= THRESHOLD_EASY else '✗'}"
 
     return 0, "Unknown gesture"
 
@@ -474,7 +473,6 @@ def load_meme_image(filename, target_h=240):
     path = os.path.join(MEMES_DIR, filename)
     img  = cv2.imread(path)
     if img is None:
-        # Placeholder
         img = np.ones((target_h, target_h, 3), dtype=np.uint8) * 40
     h, w = img.shape[:2]
     scale = target_h / h
@@ -614,12 +612,10 @@ def build_photobooth_strip(meme_list, user_photos):
     strip_h = HEADER_H + n * (ROW_H + LABEL_H + 18) + PAD
 
     strip = np.zeros((strip_h, strip_w, 3), dtype=np.uint8)
-    # Soft pastel purple-pink gradient background
     for i in range(strip_h):
         t = i / max(1, strip_h)
         strip[i, :] = (int(60 + 40 * t), int(20 + 20 * t), int(45 + 35 * t))
 
-    # Scatter cute stickers in the background, avoiding the photo thumbnails themselves
     photo_rects = []
     y_probe = HEADER_H
     for _ in range(n):
@@ -639,7 +635,6 @@ def build_photobooth_strip(meme_list, user_photos):
 
     y = HEADER_H
     for idx, (meme, user_frame) in enumerate(zip(meme_list, user_photos)):
-        # Reference meme thumbnail (left) — Polaroid-style white border
         meme_thumb = load_meme_image(meme["file"], target_h=ROW_H)
         mh, mw = meme_thumb.shape[:2]
         mw2 = min(mw, THUMB_W)
@@ -649,7 +644,6 @@ def build_photobooth_strip(meme_list, user_photos):
         draw_rounded_rect(strip, (lx-6, y-6), (lx+THUMB_W+6, y+ROW_H+6),
                           (255, 190, 220), radius=8, thickness=3)
 
-        # User's captured photo (right) — Polaroid-style white border
         uh, uw = user_frame.shape[:2]
         uscale = ROW_H / uh
         user_resized = cv2.resize(user_frame, (int(uw * uscale), ROW_H))
@@ -660,15 +654,12 @@ def build_photobooth_strip(meme_list, user_photos):
         draw_rounded_rect(strip, (rx-6, y-6), (rx+THUMB_W+6, y+ROW_H+6),
                           (180, 230, 190), radius=8, thickness=3)
 
-        # Little heart divider between the pair
         draw_heart(strip, (lx + THUMB_W + GAP // 2, y + ROW_H // 2), 11, (255, 170, 205))
 
-        # Cute number badge (star-shaped) instead of a plain rectangle
         draw_star(strip, (lx + 16, y + 16), 15, (255, 205, 90))
         cv2.putText(strip, str(idx+1), (lx + 11, y + 21),
                    cv2.FONT_HERSHEY_DUPLEX, 0.5, (80, 40, 10), 1, cv2.LINE_AA)
 
-        # Label below the row
         put_text_with_shadow(strip, f"#{idx+1}  {meme['name']}",
                              (PAD, y + ROW_H + 26),
                              scale=0.7, color=(220, 220, 220), thickness=2)
@@ -747,7 +738,7 @@ def show_results_window(strip, filepath):
 
     tk_img = ImageTk.PhotoImage(pil_img)
     img_label = tk.Label(root, image=tk_img, bg="#141020")
-    img_label.image = tk_img  # keep a reference so it isn't garbage-collected
+    img_label.image = tk_img
     img_label.pack(padx=16, pady=16)
 
     form = tk.Frame(root, bg="#141020")
@@ -777,7 +768,6 @@ def show_results_window(strip, filepath):
                          font=("Segoe UI", 11, "bold"), relief="flat", padx=16)
     send_btn.pack(side=tk.LEFT)
 
-    # Allow pressing Enter in the email field to trigger Send too
     email_entry.bind("<Return>", lambda e: on_send())
 
     status_label = tk.Label(root, textvariable=status_var, font=("Segoe UI", 10),
@@ -794,13 +784,12 @@ def show_final_screen(user_photo, meme_images, captured_photos=None):
     """Show the epic final results screen side-by-side, and save a downloadable photobooth strip."""
     captured_photos = captured_photos or []
 
-    # Build & save the photobooth-style comparison strip (meme vs. your photo, per meme)
     saved_path = None
     strip = None
     if captured_photos:
         strip = build_photobooth_strip(meme_images, captured_photos)
         saved_path = save_photobooth_strip(strip)
-    # Generate a fun random score
+
     base_score = random.randint(6, 10)
     decimal    = random.choice([0, 0, 0.5])
     score      = min(10, base_score + decimal)
@@ -822,7 +811,6 @@ def show_final_screen(user_photo, meme_images, captured_photos=None):
     PANEL_W = 1280
     canvas = np.zeros((PANEL_H, PANEL_W, 3), dtype=np.uint8)
 
-    # Background gradient
     for i in range(PANEL_H):
         t = i / PANEL_H
         r = int(15 + 10 * t)
@@ -830,33 +818,27 @@ def show_final_screen(user_photo, meme_images, captured_photos=None):
         b = int(40 + 30 * t)
         canvas[i, :] = (b, g, r)
 
-    # Title
-    title = "🎭  MimicMe CHALLENGE  RESULTS  🎭"
     put_text_with_shadow(canvas, "MimicMe CHALLENGE  -  FINAL RESULTS",
                          (PANEL_W // 2 - 380, 55),
                          font=cv2.FONT_HERSHEY_DUPLEX,
                          scale=1.2, color=(255, 220, 50), thickness=3)
 
-    # ── User photo (left) ──
     photo_target_h = 360
     ph, pw = user_photo.shape[:2]
     scale  = photo_target_h / ph
     user_resized = cv2.resize(user_photo, (int(pw * scale), photo_target_h))
     uw, uh_actual = user_resized.shape[1], user_resized.shape[0]
     ux, uy = 40, 100
-    # Border
     draw_rounded_rect(canvas, (ux-6, uy-6), (ux+uw+6, uy+uh_actual+6),
                       (255, 200, 50), radius=12)
     canvas[uy:uy+uh_actual, ux:ux+uw] = user_resized
     put_text_with_shadow(canvas, "YOU (the legend)", (ux + 10, uy + uh_actual + 30),
                          scale=0.85, color=(255, 200, 50))
 
-    # ── Meme collage (right) ──
     COLLAGE_X = int(PANEL_W * 0.38)
     meme_thumbs = [load_meme_image(m["file"], target_h=165) for m in memes_completed]
     n = len(meme_thumbs)
     cols = 3
-    rows = (n + cols - 1) // cols
     THUMB_W = 185
     THUMB_H = 165
     for idx, thumb in enumerate(meme_thumbs):
@@ -868,16 +850,13 @@ def show_final_screen(user_photo, meme_images, captured_photos=None):
         th2 = min(th, THUMB_H)
         tw2 = min(tw, THUMB_W)
         canvas[ty:ty+th2, tx:tx+tw2] = thumb[:th2, :tw2]
-        # number badge
         draw_rounded_rect(canvas, (tx+2, ty+2), (tx+28, ty+28), (255,100,0), radius=5)
         put_text_with_shadow(canvas, str(idx+1), (tx+8, ty+22), scale=0.65, thickness=2)
 
-    collage_label = "MEMES YOU CRUSHED 💀"
-    put_text_with_shadow(canvas, collage_label,
+    put_text_with_shadow(canvas, "MEMES YOU CRUSHED 💀",
                          (COLLAGE_X, 90),
                          scale=0.9, color=(180,220,255), thickness=2)
 
-    # ── Score box ──
     sx, sy = 40, 510
     draw_rounded_rect(canvas, (sx, sy), (sx+360, sy+160), (30,15,70), radius=20)
     draw_rounded_rect(canvas, (sx, sy), (sx+360, sy+160), (255,200,50), radius=20, thickness=3)
@@ -889,7 +868,6 @@ def show_final_screen(user_photo, meme_images, captured_photos=None):
     fit_text(canvas, comment, sx + 20, sy + 120, 330,
              base_scale=0.7, color=(220,220,220), thickness=2)
 
-    # ── Instruction ──
     put_text_with_shadow(canvas, "Press  Q  or  ESC  to exit",
                          (COLLAGE_X, PANEL_H - 30),
                          scale=0.75, color=(160,160,160), thickness=1)
@@ -899,7 +877,6 @@ def show_final_screen(user_photo, meme_images, captured_photos=None):
                              (40, PANEL_H - 30),
                              scale=0.65, color=(120, 255, 180), thickness=1)
 
-    # Show loop
     cv2.namedWindow("🏆 FINAL SCORE", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("🏆 FINAL SCORE", PANEL_W, PANEL_H)
     while True:
@@ -927,7 +904,6 @@ def main():
         print("❌  Cannot open webcam. Check camera permissions.")
         return
 
-    # Auto-detect camera resolution
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     frame_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -938,7 +914,6 @@ def main():
     print("     Match the pose shown on screen to advance.")
     print("     Press Q or ESC to quit at any time.\n")
 
-    # MediaPipe models
     hands_detector = mp_hands.Hands(
         static_image_mode=False,
         max_num_hands=2,
@@ -956,15 +931,13 @@ def main():
     hold_counter     = 0
     last_slang       = random.choice(FAIL_SLANGS)
     slang_timer      = 0
-    success_flash    = 0   # frames for green flash
+    success_flash    = 0
     last_score       = 0
 
-    # For final photo
     best_user_photo  = None
     last_good_frame  = None
-    captured_photos  = []   # one user photo captured per completed meme, in order
+    captured_photos  = []
 
-    # Pre-load meme images (small panel)
     meme_panels = {m["file"]: load_meme_image(m["file"], target_h=220) for m in MEMES}
 
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
@@ -976,7 +949,7 @@ def main():
             print("❌  Camera frame lost.")
             break
 
-        frame = cv2.flip(frame, 1)   # mirror for natural feel
+        frame = cv2.flip(frame, 1)
         rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb.flags.writeable = False
 
@@ -985,10 +958,8 @@ def main():
 
         rgb.flags.writeable = True
 
-        # ── Landmark extraction ──
         lm = get_landmarks_normalized(r_hands, r_pose, frame_w, frame_h)
 
-        # ── Current meme ──
         meme = MEMES[current_meme_idx]
         score, hint = score_gesture(meme["gesture"], lm)
         last_score = score
@@ -999,12 +970,11 @@ def main():
             hold_counter += 1
             last_good_frame = frame.copy()
         else:
-            hold_counter = max(0, hold_counter - 3)   # gentle decay, not a hard reset
+            hold_counter = max(0, hold_counter - 3)
             slang_timer += 1
-            if slang_timer % 45 == 0:   # change slang every ~1.5s
+            if slang_timer % 45 == 0:
                 last_slang = random.choice(FAIL_SLANGS)
 
-        # ── Advance to next meme ──
         if hold_counter >= HOLD_FRAMES:
             memes_completed.append(meme)
             captured_photos.append(last_good_frame.copy() if last_good_frame is not None else frame.copy())
@@ -1017,7 +987,6 @@ def main():
             hold_counter = 0
 
             if current_meme_idx >= len(MEMES):
-                # All done!
                 cap.release()
                 hands_detector.close()
                 pose_detector.close()
@@ -1032,26 +1001,21 @@ def main():
         # ════════════════════════════════════════
 
         overlay = frame.copy()
-
-        # Semi-transparent top bar
         draw_rounded_rect(overlay, (0, 0), (frame_w, 70), (10, 5, 30), radius=0)
         alpha = 0.8
         cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
 
-        # ── Title bar ──
         put_text_with_shadow(frame,
                              f"HEX MEME CHALLENGE  |  #{current_meme_idx+1}/{len(MEMES)}  {meme['name']}",
                              (15, 42),
                              font=cv2.FONT_HERSHEY_DUPLEX,
                              scale=0.9, color=(255, 220, 50), thickness=2)
 
-        # ── Meme panel (top right) ──
         panel = meme_panels.get(meme["file"])
         if panel is not None:
             ph, pw = panel.shape[:2]
             px = frame_w - pw - 15
             py = 80
-            # Background box
             draw_rounded_rect(frame, (px - 8, py - 8), (px + pw + 8, py + ph + 8),
                               (20, 10, 60), radius=12)
             draw_rounded_rect(frame, (px - 8, py - 8), (px + pw + 8, py + ph + 8),
@@ -1061,7 +1025,6 @@ def main():
                                  (px - 130, py + ph // 2),
                                  scale=0.75, color=(255, 200, 50), thickness=2)
 
-        # ── Instruction text ──
         inst_y = frame_h - 120
         draw_rounded_rect(frame, (10, inst_y - 10), (frame_w - 10, inst_y + 45),
                           (10, 5, 40), radius=10)
@@ -1069,7 +1032,6 @@ def main():
                  20, inst_y + 28, frame_w - 40,
                  base_scale=0.9, color=(180, 230, 255), thickness=2)
 
-        # ── Progress bar ──
         bar_y = frame_h - 65
         put_text_with_shadow(frame, "ACCURACY:", (15, bar_y - 5), scale=0.7,
                              color=(200,200,200), thickness=1)
@@ -1080,7 +1042,6 @@ def main():
                              (frame_w - 160, bar_y - 5),
                              scale=0.85, color=bar_color, thickness=2)
 
-        # ── Hold progress ──
         if passed and hold_counter > 0:
             hold_pct = int(hold_counter / HOLD_FRAMES * 100)
             draw_progress_bar(frame, 130, bar_y + 12, frame_w - 300, 16,
@@ -1089,12 +1050,10 @@ def main():
                                  (frame_w - 160, bar_y + 24),
                                  scale=0.7, color=(50,255,200), thickness=2)
 
-        # ── Slang / feedback ──
         if not passed:
             slang_y = frame_h // 2 - 20
             (tw, th_), _ = cv2.getTextSize(last_slang, cv2.FONT_HERSHEY_DUPLEX, 1.1, 3)
             sx = max(10, (frame_w - tw) // 2)
-            # Translucent pill background
             pill_pad = 18
             draw_rounded_rect(frame,
                               (sx - pill_pad, slang_y - th_ - pill_pad),
@@ -1114,14 +1073,12 @@ def main():
             green_overlay[:] = (30, 200, 30)
             alpha_s = 0.25 * (success_flash / 30)
             cv2.addWeighted(green_overlay, alpha_s, frame, 1 - alpha_s, 0, frame)
-            suc_text = random.choice(SUCCESS_SLANGS) if success_flash == 30 else SUCCESS_SLANGS[0]
             put_text_with_shadow(frame, "✓  NEXT MEME UNLOCKED!",
                                  (frame_w // 2 - 220, frame_h // 2),
                                  font=cv2.FONT_HERSHEY_DUPLEX,
                                  scale=1.4, color=(100, 255, 100), thickness=3)
             success_flash -= 1
 
-        # ── Pose/hand landmarks (optional subtle overlay) ──
         if r_hands.multi_hand_landmarks:
             for hl in r_hands.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(
@@ -1130,7 +1087,6 @@ def main():
                     mp_drawing_styles.get_default_hand_connections_style(),
                 )
 
-        # ── Footer hint ──
         put_text_with_shadow(frame, "Q / ESC = quit",
                              (15, frame_h - 12),
                              scale=0.55, color=(100,100,100), thickness=1)
